@@ -1,0 +1,69 @@
+# Gorse (gorse-in-one) configuration for local development.
+# Cache lives in Redis, model data in PostgreSQL.
+
+[database]
+cache_store = "redis://redis:6379/1"
+data_store = "postgres://ecom:ecom@postgres:5432/ecom_gorse?sslmode=disable"
+table_prefix = "gorse_"
+
+[master]
+port = 8086
+host = "0.0.0.0"
+# REST API + dashboard (gorse-in-one): use http://gorse:8088 in compose
+http_port = 8088
+http_host = "0.0.0.0"
+n_jobs = 2
+meta_timeout = "10s"
+dashboard_user_name = "admin"
+dashboard_password = "admin"
+
+[server]
+host = "0.0.0.0"
+port = 8087
+default_n = 20
+api_key = "gorseApiKeyForLocalDevOnly"
+clock_error = "5s"
+auto_insert_user = true
+auto_insert_item = true
+
+[recommend]
+cache_size = 100
+cache_expire = "72h"
+
+[recommend.data_source]
+# Mirrors FEEDBACK_EVENTS in services/eventer/routes.py
+positive_feedback_types = ["purchase", "add_to_cart", "favorite", "subscribe"]
+read_feedback_types = ["view"]
+positive_feedback_ttl = "0"
+item_ttl = "0"
+
+[recommend.popular]
+popular_window = "720h"
+
+[recommend.user_neighbors]
+neighbor_type = "auto"
+
+[recommend.item_neighbors]
+neighbor_type = "auto"
+
+[recommend.collaborative]
+enable_index = true
+model_fit_period = "10m"
+model_search_period = "60m"
+model_search_epoch = 100
+model_search_trials = 10
+
+[recommend.replacement]
+enable_replacement = false
+
+[recommend.offline]
+check_recommend_period = "1m"
+refresh_recommend_period = "24h"
+explore_recommend = { popular = 0.1, latest = 0.2 }
+
+[recommend.online]
+fallback_recommend = ["item_based", "popular", "latest"]
+num_feedback_fallback_item_based = 10
+
+[tracing]
+enable_tracing = false

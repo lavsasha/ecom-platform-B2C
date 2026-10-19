@@ -1,0 +1,72 @@
+# Dev bind-mounts and autoreload
+
+x-dev: &dev
+  command:
+    - uvicorn
+    - main:app
+    - --host
+    - "0.0.0.0"
+    - --port
+    - "8000"
+    - --reload
+    - --reload-dir
+    - /app/services
+    - --reload-dir
+    - /app/libs
+  environment:
+    LOG_JSON: "false"
+    LOG_LEVEL: DEBUG
+
+services:
+  b2c:
+    <<: *dev
+    volumes:
+      - ./services/b2c:/app/services/b2c
+      - ./libs/common:/app/libs/common
+
+  users:
+    <<: *dev
+    volumes:
+      - ./services/users:/app/services/users
+      - ./libs/common:/app/libs/common
+
+  publications:
+    <<: *dev
+    volumes:
+      - ./services/publications:/app/services/publications
+      - ./libs/common:/app/libs/common
+
+  cart:
+    <<: *dev
+    volumes:
+      - ./services/cart:/app/services/cart
+      - ./libs/common:/app/libs/common
+
+  orders:
+    <<: *dev
+    volumes:
+      - ./services/orders:/app/services/orders
+      - ./libs/common:/app/libs/common
+
+  goods:
+    <<: *dev
+    volumes:
+      - ./services/goods:/app/services/goods
+      - ./libs/common:/app/libs/common
+
+  eventer:
+    <<: *dev
+    volumes:
+      - ./services/eventer:/app/services/eventer
+      - ./libs/common:/app/libs/common
+
+  search:
+    <<: *dev
+    volumes:
+      - ./services/search:/app/services/search
+      - ./libs/common:/app/libs/common
+
+  seed:
+    volumes:
+      - ./deploy:/deploy
+      - ./requirements.txt:/requirements.txt

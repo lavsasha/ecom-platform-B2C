@@ -1,0 +1,25 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.log
+.idea/
+.vscode/
+artifacts/
+
+# Local specification files (not part of the repo)
+*.pdf
+
+# Local curl/debug (may contain JWT cookies)
+cookies.txt
+login-headers.txt
+*-headers.txt

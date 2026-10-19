@@ -1,0 +1,351 @@
+name: ecom-platform
+
+x-service-base: &service-base
+  restart: unless-stopped
+  environment: &service-env
+    ENVIRONMENT: ${ENVIRONMENT:-local}
+    LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    LOG_JSON: ${LOG_JSON:-true}
+    KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+    AUTH_DEV_MODE: ${AUTH_DEV_MODE:-true}
+    AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-changeme}
+  healthcheck:
+    test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+    interval: 10s
+    timeout: 3s
+    retries: 10
+    start_period: 30s
+
+x-db-depends: &db-depends
+  postgres:
+    condition: service_healthy
+
+services:
+  # ---------------------------------------------------------------- infrastructure
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ecom}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ecom}
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./deploy/postgres/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ecom}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  kafka:
+    image: apache/kafka:3.7.1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      CLUSTER_ID: 5L6g3nShT-eMCtK--X86sw
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    ports:
+      - "9094:9094"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 20s
+
+  kafka-init:
+    image: apache/kafka:3.7.1
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/scripts/init-topics.sh"]
+    volumes:
+      - ./deploy/kafka:/scripts:ro
+    restart: "no"
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.11
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-masterKeyForLocalDevOnly}
+      MEILI_ENV: development
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - meili-data:/meili_data
+    ports:
+      - "7700:7700"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  gorse:
+    image: zhenghaoz/gorse-in-one:0.4.16
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command:
+      - -c
+      - /etc/gorse/config.toml
+      - --log-path
+      - /var/log/gorse/master.log
+      - --cache-path
+      - /var/lib/gorse/master_cache.data
+    volumes:
+      - ./deploy/gorse/config.toml:/etc/gorse/config.toml:ro
+      - gorse-data:/var/lib/gorse
+      - gorse-logs:/var/log/gorse
+    ports:
+      - "8086:8086"
+      - "8087:8087"
+      - "8088:8088"
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------- platform services
+  b2c:
+    <<: *service-base
+    build:
+      context: .
+      args:
+        SERVICE: b2c
+    environment:
+      <<: *service-env
+      SERVICE_NAME: b2c
+      B2C_USERS_URL: http://users:8000
+      B2C_PUBLICATIONS_URL: http://publications:8000
+      B2C_CART_URL: http://cart:8000
+      B2C_ORDERS_URL: http://orders:8000
+      B2C_GOODS_URL: http://goods:8000
+      B2C_SEARCH_URL: http://search:8000
+      B2C_EVENTER_URL: http://eventer:8000
+      B2C_GORSE_URL: http://gorse:8088
+      B2C_GORSE_API_KEY: ${GORSE_API_KEY:-gorseApiKeyForLocalDevOnly}
+      B2C_UPSTREAM_TIMEOUT_SECONDS: ${B2C_UPSTREAM_TIMEOUT_SECONDS:-2.0}
+      B2C_UPSTREAM_RETRIES: ${B2C_UPSTREAM_RETRIES:-2}
+    depends_on:
+      users:
+        condition: service_started
+      publications:
+        condition: service_started
+      cart:
+        condition: service_started
+      orders:
+        condition: service_started
+      goods:
+        condition: service_started
+      search:
+        condition: service_started
+      eventer:
+        condition: service_started
+    ports:
+      - "8080:8000"
+
+  users:
+    <<: *service-base
+    build:
+      context: .
+      args:
+        SERVICE: users
+    environment:
+      <<: *service-env
+      SERVICE_NAME: users
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ecom}:${POSTGRES_PASSWORD:-ecom}@postgres:5432/ecom_users
+    depends_on: *db-depends
+    ports:
+      - "8001:8000"
+
+  publications:
+    <<: *service-base
+    build:
+      context: .
+      args:
+        SERVICE: publications
+    environment:
+      <<: *service-env
+      SERVICE_NAME: publications
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ecom}:${POSTGRES_PASSWORD:-ecom}@postgres:5432/ecom_publications
+    depends_on: *db-depends
+    ports:
+      - "8002:8000"
+
+  cart:
+    <<: *service-base
+    build:
+      context: .
+      args:
+        SERVICE: cart
+    environment:
+      <<: *service-env
+      SERVICE_NAME: cart
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ecom}:${POSTGRES_PASSWORD:-ecom}@postgres:5432/ecom_cart
+    depends_on: *db-depends
+    ports:
+      - "8003:8000"
+
+  orders:
+    <<: *service-base
+    build:
+      context: .
+      args:
+        SERVICE: orders
+    environment:
+      <<: *service-env
+      SERVICE_NAME: orders
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ecom}:${POSTGRES_PASSWORD:-ecom}@postgres:5432/ecom_orders
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8004:8000"
+
+  goods:
+    <<: *service-base
+    build:
+      context: .
+      args:
+        SERVICE: goods
+    environment:
+      <<: *service-env
+      SERVICE_NAME: goods
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ecom}:${POSTGRES_PASSWORD:-ecom}@postgres:5432/ecom_goods
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8006:8000"
+
+  eventer:
+    <<: *service-base
+    build:
+      context: .
+      args:
+        SERVICE: eventer
+    environment:
+      <<: *service-env
+      SERVICE_NAME: eventer
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      GORSE_URL: ${GORSE_URL:-http://gorse:8088}
+      GORSE_API_KEY: ${GORSE_API_KEY:-gorseApiKeyForLocalDevOnly}
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8005:8000"
+
+  search:
+    <<: *service-base
+    build:
+      context: .
+      args:
+        SERVICE: search
+    environment:
+      <<: *service-env
+      SERVICE_NAME: search
+      MEILI_URL: ${MEILI_URL:-http://meilisearch:7700}
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-masterKeyForLocalDevOnly}
+      GOODS_URL: http://goods:8000
+    depends_on:
+      meilisearch:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8007:8000"
+
+  seed:
+    image: python:3.12-slim
+    working_dir: /deploy
+    volumes:
+      - ./deploy:/deploy
+      - ./requirements.txt:/requirements.txt
+    command: sh -c "pip install -q -r /requirements.txt && python /deploy/seed.py"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ecom}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ecom}
+      POSTGRES_HOST: postgres
+      MEILI_URL: ${MEILI_URL:-http://meilisearch:7700}
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-masterKeyForLocalDevOnly}
+      GORSE_URL: ${GORSE_URL:-http://gorse:8088}
+      GORSE_API_KEY: ${GORSE_API_KEY:-gorseApiKeyForLocalDevOnly}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      gorse:
+        condition: service_started
+    restart: "no"
+
+  test:
+    profiles: [test]
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - .:/app
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ecom}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ecom}
+      TEST_POSTGRES_HOST: postgres
+      TEST_POSTGRES_PORT: "5432"
+      KAFKA_ENABLED: "false"
+      AUTH_DEV_MODE: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - bash
+      - -c
+      - |
+        pip install -q -r requirements.txt &&
+        pytest tests/unit -m unit -q &&
+        pytest tests/validation -m validation -q &&
+        pytest tests/integration/b2c -m integration -q &&
+        pytest tests/integration/cart -m integration -q &&
+        pytest tests/integration/users -m integration -q &&
+        pytest tests/integration/orders -m integration -q &&
+        pytest tests/integration/publications -m integration -q --cov=libs/common --cov=services --cov-report=term-missing:skip-covered
+
+volumes:
+  postgres-data:
+  redis-data:
+  kafka-data:
+  meili-data:
+  gorse-data:
+  gorse-logs:
