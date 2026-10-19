@@ -1,8 +1,8 @@
 # ecom-platform — B2C
 
-Центральный модуль **`b2c`** — stateless BFF: одна ручка на страницу фронта, данные собираются из микросервисов по HTTP. Собственной БД у B2C нет.
+Центральный модуль **`b2c`** - stateless BFF: одна ручка на страницу фронта, данные собираются из микросервисов по HTTP. Собственной БД у B2C нет.
 
-Контрактные сущности (`Seller`, `Product`, `Post`, …) описаны в [`libs/common/contract.py`](libs/common/contract.py); HTTP-ручки `/api/*` — в [`services/b2c/contract_api/router.py`](services/b2c/contract_api/router.py). Сервисы хранят данные у себя, B2C маппит ответы в общий формат.
+Контрактные сущности (`Seller`, `Product`, `Post`, …) описаны в [`libs/common/contract.py`](libs/common/contract.py); HTTP-ручки `/api/*` - в [`services/b2c/contract_api/router.py`](services/b2c/contract_api/router.py). Сервисы хранят данные у себя, B2C маппит ответы в общий формат.
 
 ## Быстрый старт
 
@@ -14,13 +14,11 @@ docker compose run --rm seed
 
 Если Gorse не нужен для проверки каталога: `SEED_SKIP_GORSE=1 docker compose run --rm seed`
 
-- **HTTP API для фронта:** http://localhost:8080/api — cookie `auth-token`, CORS `http://localhost:3000`  
-- **BFF страницы:** `GET /api/v1/pages/*` — [docs/page-contracts.md](docs/page-contracts.md)  
+- **HTTP API для фронта:** http://localhost:8080/api - cookie `auth-token`, CORS `http://localhost:3000`  
+- **BFF страницы:** `GET /api/v1/pages/*` - [docs/page-contracts.md](docs/page-contracts.md)  
 - Swagger: http://localhost:8080/docs  
 - Dev без cookie: `X-User-Id: 11111111-1111-1111-1111-111111111111`  
 - Демо-логин: `anna_buyer` / email `buyer1@example.com` / пароль `secret123` → `POST http://localhost:8080/api/auth/login`
-
-После смены схемы сервисов (masters → sellers, publications → posts) при старом томе Postgres может понадобиться `docker compose down -v` и повторный `seed`.
 
 ## Архитектура
 
@@ -52,7 +50,7 @@ services/eventer/ события → Redis / Kafka / Gorse
 
 На Windows без `make` используйте те же команды `pytest …` из [docs/testing.md](docs/testing.md) или `docker compose --profile test run --rm test`.
 
-Проверка readiness (в контейнере есть **curl**, не wget):
+Проверка, что сервис готов к работе:
 
 ```bash
 docker compose exec eventer curl -fsS http://localhost:8000/readyz
