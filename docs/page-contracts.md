@@ -7,7 +7,7 @@
 | Путь | Назначение |
 | --- | --- |
 | `/pages/home` | Рекомендации, категории, популярные мастера, лента подписок |
-| `/pages/search` | Выдача (`q`, `page`, `limit`). GET: `q` в URL — только [percent-encoding](https://datatracker.ietf.org/doc/html/rfc3986) (кириллица → `%D1%87%D0%B0%D0%B9`). Для curl/PowerShell удобнее `POST /pages/search` с JSON `{"q":"чай","limit":10}`. |
+| `/pages/search` | Выдача (`q`, `page`, `limit`). GET: `q` в URL - только [percent-encoding](https://datatracker.ietf.org/doc/html/rfc3986). Для curl/PowerShell удобнее `POST /pages/search` с JSON `{"q":"чай","limit":10}`. |
 | `/pages/publications` | Лента публикаций |
 | `/pages/publications/{publication_id}` | Публикация + товары |
 | `/pages/products/{product_id}` | Карточка товара |

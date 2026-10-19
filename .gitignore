@@ -16,7 +16,6 @@ build/
 .vscode/
 artifacts/
 
-# Local specification files (not part of the repo)
 *.pdf
 
 # Local curl/debug (may contain JWT cookies)

@@ -1,6 +1,6 @@
 # Тестирование
 
-Три уровня тестов живут в каталоге [`tests/`](../tests/):
+В каталоге [`tests/`](../tests/) три уровня тестов:
 
 | Уровень | Каталог | Маркер | Зависимости |
 |--------|---------|--------|-------------|
@@ -74,5 +74,3 @@ make test-docker
 - **Unit:** `gather`, мапперы B2C, DTO, курсоры publications, суммы cart, граф статусов orders, маппинг search indexer, фильтр Gorse feedback в eventer.
 - **Validation:** `{data, error}` envelope, Pydantic-контракты, HTTP-форматы `/api/*` и BFF validation.
 - **Integration:** реальные CRUD cart/users/publications/orders через ASGI; B2C с `respx` (моки апстримов).
-
-Старый каталог `services/b2c/tests` удалён — используйте `tests/integration/b2c/`.
